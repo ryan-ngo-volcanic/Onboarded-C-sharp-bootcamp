@@ -1,0 +1,6 @@
+@WikipediaSearch.Api_HostAddress = http://localhost:5031
+
+GET {{WikipediaSearch.Api_HostAddress}}/wikipedia-search/
+Accept: application/json
+
+###

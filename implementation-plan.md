@@ -325,6 +325,18 @@ Before writing application classes:
 
 **Deliverable:** concise acceptance examples written in plain English.
 
+## CSV Contract
+
+- The first row must have a `keyword` header.
+- The CSV must contain one keyword column.
+- Leading and trailing whitespace is removed.
+- Blank rows are ignored.
+- Duplicate keywords are removed case-insensitively.
+- The spelling of the first duplicate is preserved.
+- After removing blanks and duplicates, the file must contain 1–100 keywords.
+- Each keyword must contain 1–100 characters.
+- If any rule fails, the entire file is rejected.
+
 ## Phase 2: Scaffold the Solution
 
 Create:
