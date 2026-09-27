@@ -7,20 +7,20 @@ namespace WikipediaSearch.Api.Data;
 public class ApplicationDbContext
     : IdentityDbContext<ApplicationUser>
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-        : base(options) { }
+  public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+      : base(options) { }
 
-    public DbSet<UploadBatch> UploadBatches => Set<UploadBatch>();
+  public DbSet<UploadBatch> UploadBatches => Set<UploadBatch>();
 
-    public DbSet<UploadedKeyword> UploadedKeywords => Set<UploadedKeyword>();
+  public DbSet<UploadedKeyword> UploadedKeywords => Set<UploadedKeyword>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
+  protected override void OnModelCreating(ModelBuilder modelBuilder)
+  {
+    base.OnModelCreating(modelBuilder);
 
-        modelBuilder.ApplyConfigurationsFromAssembly(
-            typeof(ApplicationDbContext).Assembly);
-    }
+    modelBuilder.ApplyConfigurationsFromAssembly(
+        typeof(ApplicationDbContext).Assembly);
+  }
 
-    public DbSet<WikipediaSearchResult> WikipediaSearchResults => Set<WikipediaSearchResult>();
+  public DbSet<WikipediaSearchResult> WikipediaSearchResults => Set<WikipediaSearchResult>();
 }

@@ -6,9 +6,9 @@ namespace WikipediaSearch.Api.Controllers;
 [Route("[controller]")]
 public class WikipediaSearchController : ControllerBase
 {
-    [HttpGet(Name = "GetWikipediaSearch")]
-    public string Get()
-    {
-        return "Hello World";
-    }
+  [HttpGet(Name = "GetWikipediaSearch")]
+  public string Get()
+  {
+    return "Hello World";
+  }
 }

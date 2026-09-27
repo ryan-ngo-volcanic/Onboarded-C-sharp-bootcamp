@@ -11,16 +11,34 @@ Build a .NET 10 ASP.NET Core API that:
 - Lets authenticated users retrieve and search only their own data.
 - Includes automated tests, CI/CD, and cloud deployment.
 
-This plan intentionally describes the work and design decisions without providing implementation code.
+This plan prioritizes a small, complete self-assignment over production-scale architecture. Build the required behavior first, then use the future-enhancement list to continue learning if desired.
+
+## Scope Decision
+
+### MVP required for the assignment
+
+- Email/password sign-up and sign-in using ASP.NET Core Identity.
+- One signed JWT access token; no refresh-token lifecycle in the MVP.
+- Authenticated CSV upload with the existing 1–100 keyword validation.
+- SQL Server persistence for users, uploads, keywords, processing status, and Wikipedia results.
+- A simple database-backed `BackgroundService` that processes one pending keyword at a time.
+- The required keyword list, detail, and search endpoints with user ownership checks.
+- Focused unit and integration tests, one CI/CD workflow, and one cloud deployment.
+
+### Deliberately deferred
+
+Refresh-token rotation, token revocation, distributed queues, multiple architecture projects, CQRS/MediatR, generic repositories, advanced metrics, infrastructure as code, and elaborate retry administration are not required for the first complete version.
 
 ## Current Workspace State
 
-The workspace is currently empty except for VS Code settings.
+Completed foundations:
 
-Available local tools:
+- .NET 10 API and xUnit test projects.
+- CSV parsing and validation tests.
+- SQL Server, EF Core, ASP.NET Core Identity, and the initial persistence schema.
+- JWT bearer validation and secure local configuration through user secrets.
 
-- .NET SDK `10.0.302`
-- Docker `29.0.2`
+Current focus: finish simple access-token issuance and the sign-up/sign-in endpoints. Refresh-token work on the current branch is experimental and should be removed when the simplified scope is implemented.
 
 ## Core Use Cases
 
@@ -250,18 +268,18 @@ Exact route names can be selected later, but define the contracts before impleme
 
 ### Sign Up
 
-- Accept registration information.
-- Reject duplicate identities.
-- Enforce a password policy.
-- Return a suitable success response without exposing internal account data.
+- Accept email and password.
+- Reject duplicate email addresses.
+- Let ASP.NET Core Identity enforce the password policy and hash the password.
+- Return one bearer access token and its expiration time.
 
 ### Sign In
 
-- Verify credentials.
-- Return a bearer access token with a limited lifetime.
-- Do not log credentials or tokens.
+- Verify email and password through ASP.NET Core Identity.
+- Return one bearer access token with a limited lifetime.
+- Do not persist, log, or return password data or signing keys.
 
-For a learning exercise, local token issuance can demonstrate JWT authentication. For a production system, use a standards-based identity provider instead of inventing an authorization server.
+Refresh tokens are intentionally excluded from the MVP. They can be added later as a separate security exercise covering hashing, rotation, revocation, reuse detection, and cleanup. For a real production system, prefer a standards-based identity provider instead of building an authorization server.
 
 ### Upload Keyword File
 
@@ -365,21 +383,22 @@ Avoid adding a generic repository layer only because some tutorials use one.
 
 **Learning focus:** EF Core relationships, migrations, indexes, constraints, and transactions.
 
-## Phase 4: Build the Authentication Vertical Slice
+## Phase 4: Build Simple Access-Token Authentication
 
 Implement registration and sign-in before business endpoints.
 
-Verify that:
+MVP steps:
 
-- Identity hashes passwords.
-- Tokens expire.
-- Invalid tokens receive unauthorized responses.
-- Protected endpoints reject anonymous requests.
-- Authentication errors do not reveal sensitive internal details.
+1. Create sign-up, sign-in, and access-token response models.
+2. Generate an HMAC-signed JWT containing `sub`, `email`, `jti`, issuer, audience, and expiration.
+3. Create sign-up and sign-in controller actions using `UserManager<ApplicationUser>`.
+4. Add one protected endpoint or integration test to prove bearer validation works.
 
-Keep token-signing secrets outside source control. Use local secret storage during development and managed cloud secrets after deployment.
+Verify that Identity hashes passwords, tokens expire, invalid tokens receive `401 Unauthorized`, duplicate registration fails safely, and protected endpoints reject anonymous requests.
 
-**Learning focus:** authentication versus authorization, claims, bearer middleware, and secret management.
+Keep the signing key outside source control. Do not implement refresh tokens, token rotation, revocation storage, or logout-token blacklists in the MVP.
+
+**Later enhancement:** replace local token issuance with a standards-based identity provider, or add secure rotating refresh tokens as a separate exercise.
 
 ## Phase 5: Build the CSV Upload Vertical Slice
 
@@ -410,36 +429,35 @@ Save representative responses as test fixtures. Automated tests should not call 
 
 **Learning focus:** `HttpClient`, JSON, HTML DOM parsing, external API etiquette, and unstable third-party markup.
 
-## Phase 7: Build the Extraction Component
+## Phase 7: Build the Wikipedia Client and Extractor
 
-Create a component that converts a Wikipedia response into the internal search-capture model.
+Create one `HttpClient`-based service that searches a fixed Wikimedia endpoint and converts the response into the stored result model.
 
-Plan for:
+MVP requirements:
 
-- Correct URL and query encoding
-- A fixed external base address
-- A descriptive `User-Agent`
-- Timeouts and cancellation
-- Retry handling for `429` and transient server errors
-- DOM parsing instead of regular expressions
-- Extraction invariant validation
-- Explicit failure behavior when expected markup is absent
+- Correct query encoding.
+- A descriptive `User-Agent`.
+- One request at a time.
+- A timeout and cancellation token.
+- Respect `429 Too Many Requests` and `Retry-After` with one bounded retry.
+- Parse saved response fixtures in tests; never call live Wikipedia from automated tests.
+- Document exactly what the stored HTML field represents.
 
-Keep HTTP transport separate from parsing so parser tests can use local fixtures.
+**Later enhancement:** separate transport from parsing, add exponential backoff with jitter, caching, richer diagnostics, and resilience policies.
 
-## Phase 8: Add Durable Background Processing
+## Phase 8: Add Simple Database-Backed Processing
 
-1. Find pending keyword records.
-2. Atomically mark a record as processing.
-3. Call the Wikipedia component.
-4. Save the capture and mark the record complete.
-5. Record safe failure and retry information when processing fails.
-6. Recover abandoned processing records after application restarts.
-7. Enforce global throttling instead of starting 100 requests simultaneously.
+Use one ASP.NET Core `BackgroundService`; do not introduce Hangfire, Service Bus, or another queue for the MVP.
 
-Avoid relying solely on an in-memory queue if uploaded work must survive application restarts.
+1. Find the oldest pending keyword.
+2. Mark it processing and save.
+3. Call the Wikipedia client sequentially.
+4. Save the result and mark it completed, or record a safe failure and mark it failed.
+5. Wait briefly, then process the next item.
 
-**Learning focus:** hosted services, dependency-injection scopes, concurrency, idempotency, retries, and durable work.
+Pending work already lives in SQL Server, so application restarts do not lose uploads. Keep concurrency at `1` to reduce rate-limit risk.
+
+**Later enhancement:** atomic job leasing, abandoned-job recovery, configurable retry schedules, distributed workers, and queue-based processing.
 
 ## Phase 9: Add Reporting Endpoints
 
@@ -454,84 +472,73 @@ Implement in this order:
 
 Create two test users and confirm that neither can retrieve the other's records.
 
-## Phase 10: Add Automated Tests
+## Phase 10: Add Focused Automated Tests
 
-### Unit Tests
+Keep tests proportional to the assignment.
 
-Prioritize tests for:
+### Unit tests
 
-- CSV validation
-- The 1-keyword boundary
-- The 100-keyword boundary
-- Rejection of 0 and 101 keywords
-- Keyword normalization and duplicate policy
-- Wikipedia fixture parsing
-- Thumbnail classification
-- Link counting
-- Retry-decision rules
-- Search and filter rules
-- Processing-state transitions
+- Retain the completed CSV parser coverage.
+- Test access-token expiration and required JWT claims.
+- Test Wikipedia extraction with a few saved fixtures.
+- Test only business transformations that can run without I/O.
 
-### Integration Tests
+### Integration tests
 
-Cover:
+- Sign-up, sign-in, and anonymous access rejection.
+- One valid and one invalid upload.
+- User ownership isolation for reporting.
+- One successful background-processing path with a fake HTTP response.
 
-- Registration and sign-in
-- Protected endpoint behavior
-- Valid and invalid file uploads
-- SQL persistence
-- User ownership isolation
-- Pagination
-- Background processing with a fake Wikipedia HTTP server
+Do not call live Wikipedia from automated tests. Advanced retry matrices, token-rotation tests, load tests, and exhaustive filtering combinations are future enhancements.
 
-Do not use live Wikipedia calls in automated tests because they would be slow, flaky, and inconsiderate.
+## Phase 11: Add Minimum Operational Safety
 
-## Phase 11: Add Operational Hardening
+Required for the MVP:
 
-Add:
+- Never log tokens, passwords, signing keys, or raw connection strings.
+- Return consistent validation errors.
+- Enforce upload and request-size limits.
+- Keep startup configuration validation.
+- Support cancellation and graceful worker shutdown.
 
-- Structured logging without tokens, passwords, or sensitive raw data
-- Health endpoints
-- Problem Details error responses
-- Request and file-size limits
-- Database indexes for user, normalized keyword, status, and timestamps
-- Metrics for pending, completed, failed, and retried jobs
-- Graceful shutdown and cancellation
-- Startup configuration validation
+**Later enhancement:** health dashboards, metrics, tracing, alerting, administrative retries, rate-limit telemetry, and automatic cleanup jobs.
 
-## Phase 12: Add CI/CD and Cloud Deployment
+## Phase 12: Add Minimal CI/CD and Cloud Deployment
 
-Azure is a direct fit with SQL Server:
+Use one GitHub Actions or Azure Pipelines workflow:
 
-- API hosting: Azure App Service or Azure Container Apps
-- Database: Azure SQL Database
-- Secrets: Azure Key Vault or protected deployment settings
-- Automation: GitHub Actions or Azure Pipelines
-
-The automated pipeline should:
-
-1. Restore dependencies.
+1. Restore.
 2. Build in Release mode.
-3. Run unit tests.
-4. Run integration tests.
-5. Publish test results and coverage.
-6. Create the deployable artifact or container.
-7. Deploy only after tests pass.
-8. Apply migrations as a controlled deployment step.
-9. Run a smoke or health check after deployment.
+3. Run tests.
+4. Publish and deploy only after tests pass.
+5. Apply migrations as a controlled deployment step.
+6. Run one API smoke check.
+
+Deploy to one ASP.NET-compatible cloud service and Azure SQL. Store connection strings and the JWT signing key in protected cloud configuration. Infrastructure as code, deployment slots, multiple environments, and Key Vault integration can be added later.
 
 Do not have every production application instance automatically apply migrations during startup.
 
-# Recommended Starting Milestone
+# Future Enhancement Backlog
 
-The first coding session should stop after this milestone:
+After the assignment is complete, optional learning exercises include:
 
-1. Establish the intended Git repository boundary.
-2. Create the .NET solution and API/test projects.
-3. Confirm `dotnet build` succeeds.
-4. Confirm `dotnet test` succeeds.
-5. Write down the exact CSV contract.
-6. Write tests for the CSV validation boundaries.
-7. Implement only enough CSV parsing to make those tests pass.
+- Rotating refresh tokens with hashed storage, revocation, reuse detection, and cleanup.
+- OAuth 2.0/OpenID Connect through a managed identity provider.
+- Distributed queues and horizontally scaled workers.
+- Atomic job leasing and abandoned-job recovery.
+- Exponential backoff, jitter, caching, and circuit breakers.
+- Full-text search over stored HTML and richer report filters.
+- OpenTelemetry, dashboards, alerting, and audit history.
+- Infrastructure as code, deployment slots, and multi-environment promotion.
 
-After that, implement authentication as the first complete API vertical slice. Leave Wikipedia integration until the technical spike is complete and the raw-HTML interpretation has been settled.
+# Current Next Milestone
+
+1. Remove the experimental refresh-token entity, migration, contracts, hashing code, and tests.
+2. Keep the existing JWT bearer validation.
+3. Implement one access-token generator with a 24-hour lifetime for this exercise.
+4. Implement email/password sign-up and sign-in.
+5. Prove that a protected endpoint accepts a valid token and rejects anonymous access.
+6. Then implement the authenticated CSV upload endpoint.
+
+Do not begin Wikipedia integration until the API interpretation and stored HTML definition are settled.

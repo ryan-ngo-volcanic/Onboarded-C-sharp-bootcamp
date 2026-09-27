@@ -39,9 +39,6 @@ builder.Services
     .Validate(options =>
         options.AccessTokenMinutes > 0,
         "JWT access-token lifetime must be positive.")
-    .Validate(options =>
-        options.RefreshTokenDays > 0,
-        "Refresh-token lifetime must be positive.")
     .ValidateOnStart();
 
 var jwtOptions = builder.Configuration

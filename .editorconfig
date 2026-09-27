@@ -1,0 +1,9 @@
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 2
+tab_width = 2
+
+[**/Data/Migrations/*.cs]
+generated_code = true
