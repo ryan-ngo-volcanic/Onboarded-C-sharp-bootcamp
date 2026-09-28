@@ -20,26 +20,29 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services
-    .AddIdentityCore<ApplicationUser>()
-    .AddEntityFrameworkStores<ApplicationDbContext>();
+  .AddIdentityCore<ApplicationUser>(options =>
+  {
+    options.User.RequireUniqueEmail = true;
+  })
+  .AddEntityFrameworkStores<ApplicationDbContext>();
 
 // Register JWT options from configuration
 builder.Services
-    .AddOptions<JwtOptions>()
-    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
-    .Validate(options =>
-        !string.IsNullOrWhiteSpace(options.Issuer),
-        "JWT issuer is required.")
-    .Validate(options =>
-        !string.IsNullOrWhiteSpace(options.Audience),
-        "JWT audience is required.")
-    .Validate(options =>
-        !string.IsNullOrWhiteSpace(options.SigningKey),
-        "JWT signing key is required.")
-    .Validate(options =>
-        options.AccessTokenMinutes > 0,
-        "JWT access-token lifetime must be positive.")
-    .ValidateOnStart();
+  .AddOptions<JwtOptions>()
+  .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
+  .Validate(options =>
+      !string.IsNullOrWhiteSpace(options.Issuer),
+      "JWT issuer is required.")
+  .Validate(options =>
+      !string.IsNullOrWhiteSpace(options.Audience),
+      "JWT audience is required.")
+  .Validate(options =>
+      !string.IsNullOrWhiteSpace(options.SigningKey),
+      "JWT signing key is required.")
+  .Validate(options =>
+      options.AccessTokenMinutes > 0,
+      "JWT access-token lifetime must be positive.")
+  .ValidateOnStart();
 
 var jwtOptions = builder.Configuration
     .GetSection(JwtOptions.SectionName)
@@ -73,6 +76,8 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddSingleton<TokenService>();
 
 var app = builder.Build();
 
